@@ -32,7 +32,7 @@ export default function ClientDashboard({ session }) {
       if (latest.exercises) {
         const init = {}
         latest.exercises.forEach((ex, i) => {
-          init[i] = { sets: ex.sets || '', reps: ex.reps || '', load: '' }
+          init[i] = { sets: ex.sets || '', reps: ex.reps || '', load: '', rpe: '', comment: '' }
         })
         setLogged(init)
       }
@@ -50,6 +50,8 @@ export default function ClientDashboard({ session }) {
       sets: logged[i]?.sets || '',
       reps: logged[i]?.reps || '',
       load: logged[i]?.load || '',
+      rpe: logged[i]?.rpe || '',
+      comment: logged[i]?.comment || '',
     }))
     const { error } = await supabase.from('feedback').insert({
       session_id: activeSession.id,
@@ -64,10 +66,14 @@ export default function ClientDashboard({ session }) {
 
   async function signOut() { await supabase.auth.signOut() }
 
+  const updateLog = (i, field, val) => {
+    setLogged(l => ({ ...l, [i]: { ...l[i], [field]: val } }))
+  }
+
   if (!clientData) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 12 }}>
       <div style={{ fontWeight: 700, fontSize: 20 }}>fittnessimo<span style={{ color: '#c8f04a' }}>.</span></div>
-      <p style={{ color: '#888', fontSize: 14 }}>Setting up your account… your coach will add you shortly.</p>
+      <p style={{ color: '#888', fontSize: 14 }}>Your coach will add you shortly — check back soon!</p>
       <button onClick={signOut} style={{ color: '#aaa', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer' }}>Sign out</button>
     </div>
   )
@@ -77,7 +83,6 @@ export default function ClientDashboard({ session }) {
   return (
     <div style={s.shell}>
       {toast && <div style={s.toast}>{toast}</div>}
-      {/* Header */}
       <div style={s.header}>
         <div style={s.logo}>fittnessimo<span style={{ color: '#c8f04a' }}>.</span></div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -86,7 +91,6 @@ export default function ClientDashboard({ session }) {
         </div>
       </div>
 
-      {/* Tabs */}
       <div style={s.tabBar}>
         <button style={{ ...s.tabBtn, ...(tab === 'today' ? s.tabActive : {}) }} onClick={() => setTab('today')}>Today's session</button>
         <button style={{ ...s.tabBtn, ...(tab === 'history' ? s.tabActive : {}) }} onClick={() => setTab('history')}>History</button>
@@ -96,7 +100,7 @@ export default function ClientDashboard({ session }) {
 
         {/* TODAY TAB */}
         {tab === 'today' && (
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ maxWidth: 620, margin: '0 auto' }}>
             {!activeSession ? (
               <div style={s.emptyState}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>🏋️</div>
@@ -115,82 +119,94 @@ export default function ClientDashboard({ session }) {
 
                 {activeSession.coach_note && (
                   <div style={s.noteBox}>
-                    <div style={s.noteLabel}>Coach note</div>
-                    <p style={{ fontSize: 14, lineHeight: 1.6, fontStyle: 'italic', color: '#444' }}>"{activeSession.coach_note}"</p>
+                    <div style={s.microLabel}>Coach note</div>
+                    <p style={{ fontSize: 14, lineHeight: 1.6, fontStyle: 'italic', color: '#444', margin: 0 }}>"{activeSession.coach_note}"</p>
                   </div>
                 )}
 
-                {/* Exercise log */}
-                <div style={s.card}>
-                  <div style={s.sectionLabel}>Log your results</div>
-                  <div style={s.exHead}>
-                    <span style={s.exLabel}>Exercise</span>
-                    <span style={s.exLabel}>Sets</span>
-                    <span style={s.exLabel}>Reps</span>
-                    <span style={s.exLabel}>kg used</span>
-                  </div>
-                  {activeSession.exercises?.map((ex, i) => (
-                    <div key={i} style={s.exRow}>
-                      <div>
-                        <div style={{ fontWeight: 500, fontSize: 14 }}>{ex.name}</div>
-                        <div style={{ fontSize: 11, color: '#aaa' }}>Target: {ex.sets}×{ex.reps}{ex.load ? ` @ ${ex.load}` : ''}</div>
+                {/* Exercises */}
+                {activeSession.exercises?.map((ex, i) => (
+                  <div key={i} style={s.exCard}>
+                    {/* Exercise name + video */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{ex.name}</div>
+                      {ex.videoUrl && (
+                        <a href={ex.videoUrl} target="_blank" rel="noreferrer" style={s.videoLink}>▶ {ex.videoLabel || 'Watch'}</a>
+                      )}
+                    </div>
+
+                    {/* Target row */}
+                    <div style={s.targetRow}>
+                      <span style={s.microLabel}>Target</span>
+                      <div style={{ display: 'flex', gap: 12, fontSize: 13, color: '#555' }}>
+                        <span>{ex.sets} sets</span>
+                        <span>{ex.reps} reps</span>
+                        {ex.load && <span>{ex.load} kg</span>}
                       </div>
-                      <input
-                        style={s.logInput}
-                        value={logged[i]?.sets ?? ex.sets}
-                        onChange={e => setLogged(l => ({ ...l, [i]: { ...l[i], sets: e.target.value } }))}
-                        disabled={submitted}
-                      />
-                      <input
-                        style={s.logInput}
-                        value={logged[i]?.reps ?? ex.reps}
-                        onChange={e => setLogged(l => ({ ...l, [i]: { ...l[i], reps: e.target.value } }))}
-                        disabled={submitted}
-                      />
-                      <input
-                        style={s.logInput}
-                        placeholder="kg"
-                        value={logged[i]?.load ?? ''}
-                        onChange={e => setLogged(l => ({ ...l, [i]: { ...l[i], load: e.target.value } }))}
-                        disabled={submitted}
-                      />
                     </div>
-                  ))}
-                </div>
 
-                {/* Video links */}
-                {activeSession.links && activeSession.links.filter(l => l.url).length > 0 && (
-                  <div style={s.card}>
-                    <div style={s.sectionLabel}>Tutorial videos</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {activeSession.links.filter(l => l.url).map((lk, i) => (
-                        <a key={i} href={lk.url} target="_blank" rel="noreferrer" style={s.linkPill}>
-                          ▶ {lk.label || 'Watch video'}
-                        </a>
-                      ))}
+                    {/* Log inputs */}
+                    <div style={s.logGrid}>
+                      <div>
+                        <div style={s.microLabel}>Sets done</div>
+                        <input style={s.logInput} value={logged[i]?.sets ?? ''} onChange={e => updateLog(i, 'sets', e.target.value)} disabled={submitted} placeholder={ex.sets} />
+                      </div>
+                      <div>
+                        <div style={s.microLabel}>Reps done</div>
+                        <input style={s.logInput} value={logged[i]?.reps ?? ''} onChange={e => updateLog(i, 'reps', e.target.value)} disabled={submitted} placeholder={ex.reps} />
+                      </div>
+                      <div>
+                        <div style={s.microLabel}>kg used</div>
+                        <input style={s.logInput} value={logged[i]?.load ?? ''} onChange={e => updateLog(i, 'load', e.target.value)} disabled={submitted} placeholder={ex.load || '—'} />
+                      </div>
+                      <div>
+                        <div style={s.microLabel}>RPE (1–10)</div>
+                        <input style={s.logInput} value={logged[i]?.rpe ?? ''} onChange={e => updateLog(i, 'rpe', e.target.value)} disabled={submitted} placeholder="8" />
+                      </div>
+                    </div>
+
+                    {/* Per-exercise comment */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={s.microLabel}>Notes for this exercise</div>
+                      <textarea
+                        style={s.commentBox}
+                        rows={2}
+                        placeholder="Felt heavy, had to drop weight, pain, PR…"
+                        value={logged[i]?.comment ?? ''}
+                        onChange={e => updateLog(i, 'comment', e.target.value)}
+                        disabled={submitted}
+                      />
                     </div>
                   </div>
-                )}
+                ))}
 
-                {/* Feedback */}
+                {/* Overall feedback */}
                 {!submitted && (
                   <div style={s.card}>
-                    <div style={s.sectionLabel}>How did it go?</div>
+                    <div style={s.sectionLabel}>Overall session feedback</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                       {FEELS.map(f => (
                         <button key={f} style={{ ...s.feelBtn, ...(feel === f ? s.feelActive : {}) }} onClick={() => setFeel(f === feel ? '' : f)}>{f}</button>
                       ))}
                     </div>
                     <textarea
-                      style={{ ...s.exInput, resize: 'none', width: '100%' }}
+                      style={{ ...s.commentBox, width: '100%' }}
                       rows={3}
-                      placeholder="Any notes for your coach? Pain, PRs, questions…"
+                      placeholder="Any general notes for your coach? Overall energy, how it went…"
                       value={note}
                       onChange={e => setNote(e.target.value)}
                     />
                     <button style={s.btnPrimary} onClick={submitSession} disabled={submitting}>
                       {submitting ? 'Submitting…' : 'Submit session →'}
                     </button>
+                  </div>
+                )}
+
+                {submitted && (
+                  <div style={{ ...s.card, textAlign: 'center', padding: '1.5rem' }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>🎉</div>
+                    <p style={{ fontWeight: 600 }}>Session logged!</p>
+                    <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>Your coach can see your results. Great work!</p>
                   </div>
                 )}
               </>
@@ -200,7 +216,7 @@ export default function ClientDashboard({ session }) {
 
         {/* HISTORY TAB */}
         {tab === 'history' && (
-          <div style={{ maxWidth: 600, margin: '0 auto' }}>
+          <div style={{ maxWidth: 620, margin: '0 auto' }}>
             <h2 style={{ fontWeight: 700, fontSize: 20, marginBottom: '1rem' }}>Session history</h2>
             {sessions.length === 0 && <p style={{ color: '#aaa', fontSize: 14 }}>No sessions yet.</p>}
             {sessions.map(ws => {
@@ -219,10 +235,14 @@ export default function ClientDashboard({ session }) {
                       {fb.feel && <span style={s.feelPill}>{fb.feel}</span>}
                       {fb.note && <p style={{ fontSize: 13, color: '#555', marginTop: 8, fontStyle: 'italic' }}>"{fb.note}"</p>}
                       {fb.logged_exercises?.length > 0 && (
-                        <div style={{ marginTop: 8 }}>
+                        <div style={{ marginTop: 10 }}>
                           {fb.logged_exercises.map((ex, i) => (
-                            <div key={i} style={{ fontSize: 12, color: '#888', padding: '3px 0' }}>
-                              {ex.name}: {ex.sets} sets · {ex.reps} reps{ex.load ? ` · ${ex.load}` : ''}
+                            <div key={i} style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8f6f2' }}>
+                              <div style={{ fontWeight: 500, marginBottom: 3 }}>{ex.name}</div>
+                              <div style={{ color: '#888', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                <span>{ex.sets} sets · {ex.reps} reps{ex.load ? ` · ${ex.load}kg` : ''}{ex.rpe ? ` · RPE ${ex.rpe}` : ''}</span>
+                              </div>
+                              {ex.comment && <p style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 3 }}>"{ex.comment}"</p>}
                             </div>
                           ))}
                         </div>
@@ -253,21 +273,21 @@ const s = {
   sessionTitle: { fontWeight: 700, fontSize: 22, letterSpacing: '-0.5px' },
   sessionDate: { fontSize: 13, color: '#888', marginTop: 3 },
   noteBox: { background: '#fff', border: '1px solid #e4e2dc', borderLeft: '3px solid #c8f04a', borderRadius: 10, padding: '1rem', marginBottom: 14 },
-  noteLabel: { fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#aaa', marginBottom: 6 },
-  card: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 14, padding: '1rem 1.25rem', marginBottom: 14 },
+  microLabel: { fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#aaa', marginBottom: 5 },
   sectionLabel: { fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#aaa', marginBottom: 10 },
-  exHead: { display: 'grid', gridTemplateColumns: '2fr 70px 70px 70px', gap: 8, marginBottom: 6 },
-  exLabel: { fontSize: 11, color: '#aaa', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  exRow: { display: 'grid', gridTemplateColumns: '2fr 70px 70px 70px', gap: 8, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f8f6f2' },
-  logInput: { padding: '7px 6px', border: '1px solid #e4e2dc', borderRadius: 8, fontSize: 13, textAlign: 'center', background: '#fafaf8', color: '#111', width: '100%' },
-  exInput: { padding: '8px 10px', border: '1px solid #e4e2dc', borderRadius: 8, fontSize: 13, background: '#fafaf8', color: '#111', width: '100%' },
+  exCard: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 14, padding: '1.25rem', marginBottom: 12 },
+  targetRow: { background: '#f7f6f3', borderRadius: 8, padding: '8px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 },
+  logGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 },
+  logInput: { padding: '9px 8px', border: '1px solid #e4e2dc', borderRadius: 8, fontSize: 14, textAlign: 'center', background: '#fafaf8', color: '#111', width: '100%', fontFamily: 'inherit' },
+  commentBox: { width: '100%', padding: '10px 12px', border: '1px solid #e4e2dc', borderRadius: 8, background: '#fafaf8', color: '#111', fontSize: 13, fontFamily: 'inherit', resize: 'none' },
+  videoLink: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', border: '1px solid #e4e2dc', borderRadius: 20, fontSize: 12, color: '#333', background: '#f7f6f3', textDecoration: 'none', flexShrink: 0 },
+  card: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 14, padding: '1rem 1.25rem', marginBottom: 14 },
   feelBtn: { background: '#f7f6f3', border: '1px solid #e4e2dc', borderRadius: 20, padding: '6px 14px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' },
   feelActive: { background: '#c8f04a', borderColor: '#9aba2e', color: '#111' },
   feelPill: { background: '#f0ede6', padding: '3px 10px', borderRadius: 20, fontSize: 12 },
   btnPrimary: { background: '#111', color: '#c8f04a', padding: '12px 20px', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', border: 'none', display: 'block', width: '100%', marginTop: 12, fontFamily: 'inherit' },
   tagGreen: { fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#eafbe5', color: '#2d7a30', fontWeight: 500, flexShrink: 0 },
   tagAmber: { fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#fef3dc', color: '#9a6800', fontWeight: 500, flexShrink: 0 },
-  linkPill: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: '1px solid #e4e2dc', borderRadius: 20, fontSize: 13, color: '#333', background: '#fff', textDecoration: 'none' },
   emptyState: { textAlign: 'center', padding: '4rem 2rem', color: '#333' },
   historyCard: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 14, padding: '1rem 1.25rem', marginBottom: 12 },
   toast: { position: 'fixed', bottom: 24, right: 24, background: '#111', color: '#c8f04a', padding: '10px 20px', borderRadius: 10, fontSize: 14, fontWeight: 500, zIndex: 999 },
