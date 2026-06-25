@@ -21,6 +21,44 @@ export default function CoachDashboard({ session }) {
   const [wNote, setWNote] = useState('')
   const [wClient, setWClient] = useState('')
   const [exercises, setExercises] = useState([{ name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }])
+  const [importText, setImportText] = useState('')
+  const [showImport, setShowImport] = useState(false)
+
+  function parseImport() {
+    if (!importText.trim()) return
+    const blocks = importText.trim().split(/\n\s*\n/)
+    const parsed = blocks.map(block => {
+      const lines = block.trim().split('\n')
+      const ex = { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }
+      lines.forEach(line => {
+        const clean = line.trim()
+        if (clean.toLowerCase().startsWith('exercise:')) ex.name = clean.slice(9).trim()
+        else if (clean.toLowerCase().startsWith('sets:')) {
+          const parts = clean.slice(5).split('|')
+          ex.sets = parts[0].trim()
+          parts.forEach(p => {
+            const t = p.trim()
+            if (t.toLowerCase().startsWith('reps:')) ex.reps = t.slice(5).trim()
+            if (t.toLowerCase().startsWith('load:')) ex.load = t.slice(5).replace(/kg/i,'').trim()
+            if (t.toLowerCase().startsWith('video:')) ex.videoUrl = t.slice(6).trim()
+            if (t.toLowerCase().startsWith('videolabel:')) ex.videoLabel = t.slice(11).trim()
+          })
+        }
+        else if (clean.toLowerCase().startsWith('reps:')) ex.reps = clean.slice(5).trim()
+        else if (clean.toLowerCase().startsWith('load:')) ex.load = clean.slice(5).replace(/kg/i,'').trim()
+        else if (clean.toLowerCase().startsWith('video:')) ex.videoUrl = clean.slice(6).trim()
+        else if (clean.toLowerCase().startsWith('videolabel:')) ex.videoLabel = clean.slice(11).trim()
+        else if (clean.toLowerCase().startsWith('comment:')) ex.comment = clean.slice(8).trim()
+      })
+      return ex
+    }).filter(e => e.name)
+    if (parsed.length > 0) {
+      setExercises(parsed)
+      setImportText('')
+      setShowImport(false)
+      showToast(`✓ ${parsed.length} exercises imported!`)
+    }
+  }
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
@@ -243,7 +281,28 @@ export default function CoachDashboard({ session }) {
               <textarea value={wNote} onChange={e => setWNote(e.target.value)} placeholder="Cue or message for the client…" rows={2} style={{ ...s.inputSm, resize: 'none' }} />
 
               <div style={s.divider} />
-              <div style={s.sectionLabel}>Exercises</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={s.sectionLabel}>Exercises</div>
+                <button style={{ ...s.btnSm, background: showImport ? '#111' : 'transparent', color: showImport ? '#c8f04a' : '#333' }} onClick={() => setShowImport(!showImport)}>
+                  {showImport ? '✕ Close import' : '⚡ Quick import from Claude'}
+                </button>
+              </div>
+
+              {showImport && (
+                <div style={s.importBox}>
+                  <div style={s.microLabel}>Paste your Claude-generated workout below</div>
+                  <textarea
+                    value={importText}
+                    onChange={e => setImportText(e.target.value)}
+                    placeholder={`Exercise: Romanian Deadlift\nSets: 4 | Reps: 10-12 | Load: 60kg\nVideoLabel: RDL tutorial | Video: https://youtube.com/...\nComment: Drive through heels\n\nExercise: Hip Thrust\nSets: 3 | Reps: 12 | Load: 80kg\nComment: Full extension at top`}
+                    rows={10}
+                    style={{ ...s.exInput, width: '100%', resize: 'vertical', marginTop: 8, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }}
+                  />
+                  <button style={{ ...s.btnPrimary, marginTop: 10 }} onClick={parseImport} disabled={!importText.trim()}>
+                    ⚡ Import exercises →
+                  </button>
+                </div>
+              )}
 
               {exercises.map((ex, i) => (
                 <div key={i} style={s.exBlock}>
@@ -366,6 +425,7 @@ const s = {
   exLabel: { fontSize: 10, color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 },
   exInput: { padding: '8px 10px', border: '1px solid #e4e2dc', borderRadius: 8, fontSize: 13, background: '#fafaf8', color: '#111', width: '100%' },
   exBlock: { background: '#fafaf8', border: '1px solid #e4e2dc', borderRadius: 12, padding: '1rem', marginBottom: 10 },
+  importBox: { background: '#111', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: 14 },
   clientCard: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 12, padding: '1rem', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: '50%', background: '#c8f04a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16, color: '#111', flexShrink: 0 },
   clientName: { fontWeight: 500, fontSize: 15 },
