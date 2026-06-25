@@ -20,7 +20,7 @@ export default function CoachDashboard({ session }) {
   const [wTitle, setWTitle] = useState('')
   const [wNote, setWNote] = useState('')
   const [wClient, setWClient] = useState('')
-  const [exercises, setExercises] = useState([{ name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }])
+  const [exercises, setExercises] = useState([{ name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '', comment: '' }])
   const [importText, setImportText] = useState('')
   const [showImport, setShowImport] = useState(false)
 
@@ -28,27 +28,21 @@ export default function CoachDashboard({ session }) {
     if (!importText.trim()) return
     const blocks = importText.trim().split(/\n\s*\n/)
     const parsed = blocks.map(block => {
-      const lines = block.trim().split('\n')
-      const ex = { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }
-      lines.forEach(line => {
-        const clean = line.trim()
-        if (clean.toLowerCase().startsWith('exercise:')) ex.name = clean.slice(9).trim()
-        else if (clean.toLowerCase().startsWith('sets:')) {
-          const parts = clean.slice(5).split('|')
-          ex.sets = parts[0].trim()
-          parts.forEach(p => {
-            const t = p.trim()
-            if (t.toLowerCase().startsWith('reps:')) ex.reps = t.slice(5).trim()
-            if (t.toLowerCase().startsWith('load:')) ex.load = t.slice(5).replace(/kg/i,'').trim()
-            if (t.toLowerCase().startsWith('video:')) ex.videoUrl = t.slice(6).trim()
-            if (t.toLowerCase().startsWith('videolabel:')) ex.videoLabel = t.slice(11).trim()
-          })
-        }
-        else if (clean.toLowerCase().startsWith('reps:')) ex.reps = clean.slice(5).trim()
-        else if (clean.toLowerCase().startsWith('load:')) ex.load = clean.slice(5).replace(/kg/i,'').trim()
-        else if (clean.toLowerCase().startsWith('video:')) ex.videoUrl = clean.slice(6).trim()
-        else if (clean.toLowerCase().startsWith('videolabel:')) ex.videoLabel = clean.slice(11).trim()
-        else if (clean.toLowerCase().startsWith('comment:')) ex.comment = clean.slice(8).trim()
+      const ex = { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '', comment: '' }
+      // Split every line by | to get all key:value pairs
+      const pairs = []
+      block.trim().split('\n').forEach(line => {
+        line.split('|').forEach(seg => pairs.push(seg.trim()))
+      })
+      pairs.forEach(seg => {
+        const lower = seg.toLowerCase()
+        if (lower.startsWith('exercise:')) ex.name = seg.slice(9).trim()
+        else if (lower.startsWith('sets:')) ex.sets = seg.slice(5).trim()
+        else if (lower.startsWith('reps:')) ex.reps = seg.slice(5).trim()
+        else if (lower.startsWith('load:')) ex.load = seg.slice(5).replace(/kg$/i,'').trim()
+        else if (lower.startsWith('videolabel:')) ex.videoLabel = seg.slice(11).trim()
+        else if (lower.startsWith('video:')) ex.videoUrl = seg.slice(6).trim()
+        else if (lower.startsWith('comment:')) ex.comment = seg.slice(8).trim()
       })
       return ex
     }).filter(e => e.name)
@@ -121,7 +115,7 @@ export default function CoachDashboard({ session }) {
       }
       showToast('Workout assigned! 🎉')
       setWTitle(''); setWNote(''); setWClient('')
-      setExercises([{ name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }])
+      setExercises([{ name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '', comment: '' }])
       load()
     }
     setSaving(false)
@@ -338,7 +332,7 @@ export default function CoachDashboard({ session }) {
                 </div>
               ))}
 
-              <button style={s.btnSm} onClick={() => setExercises([...exercises, { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '' }])}>+ Add exercise</button>
+              <button style={s.btnSm} onClick={() => setExercises([...exercises, { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '', comment: '' }])}>+ Add exercise</button>
 
               <div style={s.divider} />
               <button style={s.btnPrimary} onClick={saveWorkout} disabled={saving || !wTitle || !wClient}>
