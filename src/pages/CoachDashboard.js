@@ -26,23 +26,24 @@ export default function CoachDashboard({ session }) {
 
   function parseImport() {
     if (!importText.trim()) return
-    const blocks = importText.trim().split(/\n\s*\n/)
-    const parsed = blocks.map(block => {
+    // Split into blocks on every "Exercise:" line (with or without blank lines between)
+    const rawBlocks = importText.trim().split(/(?=Exercise:)/i).filter(b => b.trim())
+    const parsed = rawBlocks.map(block => {
       const ex = { name: '', sets: '', reps: '', load: '', videoLabel: '', videoUrl: '', comment: '' }
-      // Split every line by | to get all key:value pairs
       const pairs = []
       block.trim().split('\n').forEach(line => {
         line.split('|').forEach(seg => pairs.push(seg.trim()))
       })
       pairs.forEach(seg => {
         const lower = seg.toLowerCase()
+        const isEmpty = (v) => !v || v === '-' || v === '—' || v.toLowerCase() === 'n/a' || v.toLowerCase() === 'none'
         if (lower.startsWith('exercise:')) ex.name = seg.slice(9).trim()
-        else if (lower.startsWith('sets:')) ex.sets = seg.slice(5).trim()
-        else if (lower.startsWith('reps:')) ex.reps = seg.slice(5).trim()
-        else if (lower.startsWith('load:')) ex.load = seg.slice(5).replace(/kg$/i,'').trim()
-        else if (lower.startsWith('videolabel:')) ex.videoLabel = seg.slice(11).trim()
-        else if (lower.startsWith('video:')) ex.videoUrl = seg.slice(6).trim()
-        else if (lower.startsWith('comment:')) ex.comment = seg.slice(8).trim()
+        else if (lower.startsWith('sets:')) { const v = seg.slice(5).trim(); if (!isEmpty(v)) ex.sets = v }
+        else if (lower.startsWith('reps:')) { const v = seg.slice(5).trim(); if (!isEmpty(v)) ex.reps = v }
+        else if (lower.startsWith('load:')) { const v = seg.slice(5).replace(/kg$/i,'').trim(); if (!isEmpty(v)) ex.load = v }
+        else if (lower.startsWith('videolabel:')) { const v = seg.slice(11).trim(); if (!isEmpty(v)) ex.videoLabel = v }
+        else if (lower.startsWith('video:')) { const v = seg.slice(6).trim(); if (!isEmpty(v)) ex.videoUrl = v }
+        else if (lower.startsWith('comment:')) { const v = seg.slice(8).trim(); if (!isEmpty(v)) ex.comment = v }
       })
       return ex
     }).filter(e => e.name)
