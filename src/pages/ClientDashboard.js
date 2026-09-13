@@ -15,6 +15,25 @@ export default function ClientDashboard({ session }) {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
 
+  // Auto-save logged inputs to localStorage
+  const saveToLocal = (sessionId, data) => {
+    try { localStorage.setItem(`fittnessimo_log_${sessionId}`, JSON.stringify(data)) } catch(e) {}
+  }
+  const loadFromLocal = (sessionId) => {
+    try { const d = localStorage.getItem(`fittnessimo_log_${sessionId}`); return d ? JSON.parse(d) : null } catch(e) { return null }
+  }
+  const clearLocal = (sessionId) => {
+    try { localStorage.removeItem(`fittnessimo_log_${sessionId}`) } catch(e) {}
+  }
+
+  const updateLog = (i, field, val, sessionId) => {
+    setLogged(l => {
+      const updated = { ...l, [i]: { ...l[i], [field]: val } }
+      saveToLocal(sessionId, updated)
+      return updated
+    })
+  }
+
   const load = useCallback(async () => {
     const email = session.user.email
     const { data: c } = await supabase.from('clients').select('*').eq('email', email).single()
@@ -29,14 +48,34 @@ export default function ClientDashboard({ session }) {
     if (s && s.length > 0) {
       const latest = s[0]
       setActiveSession(latest)
-      if (latest.exercises) {
-        const init = {}
-        latest.exercises.forEach((ex, i) => {
-          init[i] = { sets: ex.sets || '', reps: ex.reps || '', load: '', rpe: '', comment: '' }
-        })
-        setLogged(init)
+      const hasFeedback = latest.feedback && latest.feedback.length > 0
+      if (hasFeedback) {
+        setSubmitted(true)
+        // Load submitted results to display
+        const fb = latest.feedback[0]
+        if (fb.logged_exercises) {
+          const init = {}
+          fb.logged_exercises.forEach((ex, i) => { init[i] = ex })
+          setLogged(init)
+        }
+        setFeel(fb.feel || '')
+        setNote(fb.note || '')
+      } else {
+        setSubmitted(false)
+        // Try to restore from localStorage first
+        const saved = loadFromLocal(latest.id)
+        if (saved) {
+          setLogged(saved)
+        } else if (latest.exercises) {
+          const init = {}
+          latest.exercises.forEach((ex, i) => {
+            init[i] = { sets: '', reps: '', load: '', rpe: '', comment: '' }
+          })
+          setLogged(init)
+        }
+        setFeel('')
+        setNote('')
       }
-      if (latest.feedback && latest.feedback.length > 0) setSubmitted(true)
     }
   }, [session])
 
@@ -60,15 +99,16 @@ export default function ClientDashboard({ session }) {
       note,
       logged_exercises: loggedExercises,
     })
-    if (!error) { showToast('Session logged! 🎉'); setSubmitted(true); load() }
+    if (!error) {
+      clearLocal(activeSession.id)
+      showToast('Session logged! 🎉')
+      setSubmitted(true)
+      load()
+    }
     setSubmitting(false)
   }
 
   async function signOut() { await supabase.auth.signOut() }
-
-  const updateLog = (i, field, val) => {
-    setLogged(l => ({ ...l, [i]: { ...l[i], [field]: val } }))
-  }
 
   if (!clientData) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 12 }}>
@@ -97,8 +137,6 @@ export default function ClientDashboard({ session }) {
       </div>
 
       <div style={s.main}>
-
-        {/* TODAY TAB */}
         {tab === 'today' && (
           <div style={{ maxWidth: 620, margin: '0 auto' }}>
             {!activeSession ? (
@@ -124,63 +162,71 @@ export default function ClientDashboard({ session }) {
                   </div>
                 )}
 
-                {/* Exercises */}
                 {activeSession.exercises?.map((ex, i) => (
                   <div key={i} style={s.exCard}>
-                    {/* Exercise name + video */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{ex.name}</div>
                       {ex.videoUrl && (
                         <a href={ex.videoUrl} target="_blank" rel="noreferrer" style={s.videoLink}>▶ {ex.videoLabel || 'Watch'}</a>
                       )}
                     </div>
 
-                    {/* Target row */}
+                    {/* Coach cue right under exercise name */}
+                    {ex.comment && (
+                      <div style={s.coachCue}>
+                        <span style={{ fontSize: 12, marginRight: 5 }}>💡</span>
+                        {ex.comment}
+                      </div>
+                    )}
+
+                    {/* Target row — read only */}
                     <div style={s.targetRow}>
                       <span style={s.microLabel}>Target</span>
                       <div style={{ display: 'flex', gap: 12, fontSize: 13, color: '#555' }}>
                         <span>{ex.sets} sets</span>
                         <span>{ex.reps} reps</span>
-                        {ex.load && <span>{ex.load} kg</span>}
+                        {ex.load && ex.load !== '-' && <span>{ex.load} kg</span>}
                       </div>
                     </div>
 
-                    {/* Log inputs */}
+                    {/* Log inputs — only editable fields, sets/reps are locked */}
                     <div style={s.logGrid}>
                       <div>
-                        <div style={s.microLabel}>Sets done</div>
-                        <input style={s.logInput} value={logged[i]?.sets ?? ''} onChange={e => updateLog(i, 'sets', e.target.value)} disabled={submitted} placeholder={ex.sets} />
-                      </div>
-                      <div>
-                        <div style={s.microLabel}>Reps done</div>
-                        <input style={s.logInput} value={logged[i]?.reps ?? ''} onChange={e => updateLog(i, 'reps', e.target.value)} disabled={submitted} placeholder={ex.reps} />
-                      </div>
-                      <div>
                         <div style={s.microLabel}>kg used</div>
-                        <input style={s.logInput} value={logged[i]?.load ?? ''} onChange={e => updateLog(i, 'load', e.target.value)} disabled={submitted} placeholder={ex.load || '—'} />
+                        <input
+                          style={s.logInput}
+                          value={logged[i]?.load ?? ''}
+                          onChange={e => !submitted && updateLog(i, 'load', e.target.value, activeSession.id)}
+                          readOnly={submitted}
+                          placeholder="—"
+                        />
                       </div>
                       <div>
                         <div style={s.microLabel}>RPE (1–10)</div>
-                        <input style={s.logInput} value={logged[i]?.rpe ?? ''} onChange={e => updateLog(i, 'rpe', e.target.value)} disabled={submitted} placeholder="8" />
+                        <input
+                          style={s.logInput}
+                          value={logged[i]?.rpe ?? ''}
+                          onChange={e => !submitted && updateLog(i, 'rpe', e.target.value, activeSession.id)}
+                          readOnly={submitted}
+                          placeholder="8"
+                        />
                       </div>
                     </div>
 
-                    {/* Per-exercise comment */}
                     <div style={{ marginTop: 10 }}>
-                      <div style={s.microLabel}>Notes for this exercise</div>
+                      <div style={s.microLabel}>Your notes for this exercise</div>
                       <textarea
-                        style={s.commentBox}
+                        style={{ ...s.commentBox, background: submitted ? '#f7f6f3' : '#fafaf8' }}
                         rows={2}
                         placeholder="Felt heavy, had to drop weight, pain, PR…"
                         value={logged[i]?.comment ?? ''}
-                        onChange={e => updateLog(i, 'comment', e.target.value)}
-                        disabled={submitted}
+                        onChange={e => !submitted && updateLog(i, 'comment', e.target.value, activeSession.id)}
+                        readOnly={submitted}
                       />
                     </div>
                   </div>
                 ))}
 
-                {/* Overall feedback */}
                 {!submitted && (
                   <div style={s.card}>
                     <div style={s.sectionLabel}>Overall session feedback</div>
@@ -192,7 +238,7 @@ export default function ClientDashboard({ session }) {
                     <textarea
                       style={{ ...s.commentBox, width: '100%' }}
                       rows={3}
-                      placeholder="Any general notes for your coach? Overall energy, how it went…"
+                      placeholder="Any general notes for your coach?"
                       value={note}
                       onChange={e => setNote(e.target.value)}
                     />
@@ -214,7 +260,6 @@ export default function ClientDashboard({ session }) {
           </div>
         )}
 
-        {/* HISTORY TAB */}
         {tab === 'history' && (
           <div style={{ maxWidth: 620, margin: '0 auto' }}>
             <h2 style={{ fontWeight: 700, fontSize: 20, marginBottom: '1rem' }}>Session history</h2>
@@ -240,7 +285,8 @@ export default function ClientDashboard({ session }) {
                             <div key={i} style={{ fontSize: 13, padding: '8px 0', borderBottom: '1px solid #f8f6f2' }}>
                               <div style={{ fontWeight: 500, marginBottom: 3 }}>{ex.name}</div>
                               <div style={{ color: '#888', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                                <span>{ex.sets} sets · {ex.reps} reps{ex.load ? ` · ${ex.load}kg` : ''}{ex.rpe ? ` · RPE ${ex.rpe}` : ''}</span>
+                                {ex.load && <span>{ex.load}kg</span>}
+                                {ex.rpe && <span>RPE {ex.rpe}</span>}
                               </div>
                               {ex.comment && <p style={{ fontSize: 12, color: '#666', fontStyle: 'italic', marginTop: 3 }}>"{ex.comment}"</p>}
                             </div>
@@ -276,8 +322,9 @@ const s = {
   microLabel: { fontSize: 10, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#aaa', marginBottom: 5 },
   sectionLabel: { fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#aaa', marginBottom: 10 },
   exCard: { background: '#fff', border: '1px solid #e4e2dc', borderRadius: 14, padding: '1.25rem', marginBottom: 12 },
+  coachCue: { fontSize: 13, color: '#555', fontStyle: 'italic', background: '#fffdf0', border: '1px solid #f0e8c0', borderRadius: 8, padding: '8px 10px', marginBottom: 12, lineHeight: 1.5 },
   targetRow: { background: '#f7f6f3', borderRadius: 8, padding: '8px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 },
-  logGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 },
+  logGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
   logInput: { padding: '9px 8px', border: '1px solid #e4e2dc', borderRadius: 8, fontSize: 14, textAlign: 'center', background: '#fafaf8', color: '#111', width: '100%', fontFamily: 'inherit' },
   commentBox: { width: '100%', padding: '10px 12px', border: '1px solid #e4e2dc', borderRadius: 8, background: '#fafaf8', color: '#111', fontSize: 13, fontFamily: 'inherit', resize: 'none' },
   videoLink: { display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', border: '1px solid #e4e2dc', borderRadius: 20, fontSize: 12, color: '#333', background: '#f7f6f3', textDecoration: 'none', flexShrink: 0 },
