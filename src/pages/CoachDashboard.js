@@ -122,8 +122,13 @@ function EditWorkoutModal({ ws, onClose, onSave, onDelete }) {
   }
 
   async function handleDelete() {
-    await supabase.from('workout_sessions').delete().eq('id', ws.id)
-    onDelete(ws)
+    const { error } = await supabase.from('workout_sessions').delete().eq('id', ws.id)
+    if (!error) {
+      onDelete(ws)
+    } else {
+      console.error('Delete failed:', error)
+      alert('Delete failed. Please try again.')
+    }
   }
 
   return (
