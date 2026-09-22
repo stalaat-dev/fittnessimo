@@ -319,8 +319,8 @@ export default function CoachDashboard({ session }) {
   function handleDeletedSession(ws) {
     setEditingSession(null)
     setUndoSession(ws)
+    setSessions(prev => prev.filter(s => s.id !== ws.id))
     showToast('Workout deleted')
-    load()
     const timer = setTimeout(() => { setUndoSession(null) }, 6000)
     setUndoTimer(timer)
   }
