@@ -17,7 +17,7 @@ function statusBadge(status) {
   if (status === 'logged') return { label: 'Done ✓', color: '#2d7a30', bg: '#eafbe5' }
   if (status === 'today') return { label: 'Do today 💪', color: '#9a6800', bg: '#fef3dc' }
   if (status === 'missed') return { label: 'Missed', color: '#c0392b', bg: '#fdecea' }
-  if (status === 'upcoming') return { label: 'Upcoming', color: '#555', bg: '#f0ede6' }
+  if (status === 'upcoming') return { label: 'Upcoming 📅', color: '#555', bg: '#f0ede6' }
   return { label: 'Session', color: '#555', bg: '#f0ede6' }
 }
 
@@ -118,7 +118,12 @@ export default function ClientDashboard({ session }) {
 
   async function signOut() { await supabase.auth.signOut() }
 
-  // Build week strip (current week)
+  const jumpToSession = (ws) => {
+    const idx = sessions.findIndex(s => s.id === ws.id)
+    if (idx !== -1) { setActiveIdx(idx); setTab('session') }
+  }
+
+  // Build week strip
   function buildWeekStrip() {
     const todayStr = today.toISOString().split('T')[0]
     const start = new Date(today)
@@ -155,11 +160,6 @@ export default function ClientDashboard({ session }) {
   const weekStrip = buildWeekStrip()
   const monthCells = buildMonthCal()
 
-  const jumpToSession = (ws) => {
-    const idx = sessions.findIndex(s => s.id === ws.id)
-    if (idx !== -1) { setActiveIdx(idx); setTab('session') }
-  }
-
   if (!clientData) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', flexDirection:'column', gap:12 }}>
       <div style={{ fontWeight:700, fontSize:20 }}>fittnessimo<span style={{ color:'#c8f04a' }}>.</span></div>
@@ -180,7 +180,7 @@ export default function ClientDashboard({ session }) {
         </div>
       </div>
 
-      {/* Week strip — always visible, all days with session are clickable */}
+      {/* Week strip */}
       <div style={s.weekStrip}>
         {weekStrip.map((d, i) => (
           <div key={i}
@@ -191,7 +191,7 @@ export default function ClientDashboard({ session }) {
             <div style={s.dayNum}>{d.date}</div>
             <div style={s.dayDot}>
               {d.ws ? (
-                <span style={{ fontSize:14, color: d.status==='logged' ? '#2d7a30' : d.status==='today' ? '#c8f04a' : d.status==='missed' ? '#c0392b' : '#888' }}>★</span>
+                <span style={{ fontSize:14, color: d.status==='logged'?'#2d7a30':d.status==='today'?'#c8f04a':d.status==='missed'?'#c0392b':'#888' }}>★</span>
               ) : (
                 <span style={{ fontSize:10, color:'#333' }}>·</span>
               )}
@@ -201,9 +201,9 @@ export default function ClientDashboard({ session }) {
       </div>
 
       <div style={s.tabBar}>
-        <button style={{ ...s.tabBtn, ...(tab==='session' ? s.tabActive : {}) }} onClick={() => setTab('session')}>Session</button>
-        <button style={{ ...s.tabBtn, ...(tab==='calendar' ? s.tabActive : {}) }} onClick={() => setTab('calendar')}>Calendar</button>
-        <button style={{ ...s.tabBtn, ...(tab==='history' ? s.tabActive : {}) }} onClick={() => setTab('history')}>History</button>
+        <button style={{ ...s.tabBtn, ...(tab==='session'?s.tabActive:{}) }} onClick={() => setTab('session')}>Session</button>
+        <button style={{ ...s.tabBtn, ...(tab==='calendar'?s.tabActive:{}) }} onClick={() => setTab('calendar')}>Calendar</button>
+        <button style={{ ...s.tabBtn, ...(tab==='history'?s.tabActive:{}) }} onClick={() => setTab('history')}>History</button>
       </div>
 
       <div style={s.main}>
@@ -212,13 +212,18 @@ export default function ClientDashboard({ session }) {
         {tab === 'session' && (
           <div style={{ maxWidth:620, margin:'0 auto' }}>
             {sessions.length === 0 && (
-              <div style={s.restDay}><div style={{ fontSize:40, marginBottom:12 }}>🏋️</div><p style={{ fontWeight:600, fontSize:18 }}>No sessions yet</p><p style={{ color:'#888', fontSize:14, marginTop:6 }}>Your coach hasn't assigned anything yet.</p></div>
+              <div style={s.restDay}>
+                <div style={{ fontSize:40, marginBottom:12 }}>🏋️</div>
+                <p style={{ fontWeight:600, fontSize:18 }}>No sessions yet</p>
+                <p style={{ color:'#888', fontSize:14, marginTop:6 }}>Your coach hasn't assigned anything yet.</p>
+              </div>
             )}
 
             {activeSession && (() => {
               const status = getSessionStatus(activeSession, today)
               const badge = statusBadge(status)
-              const canSubmit = !submitted && status !== 'upcoming'
+              const isUpcoming = status === 'upcoming'
+              const canSubmit = !submitted && !isUpcoming
 
               return (
                 <>
@@ -240,14 +245,6 @@ export default function ClientDashboard({ session }) {
                     <button style={s.navArrow} onClick={() => setActiveIdx(Math.min(sessions.length-1, activeIdx+1))} disabled={activeIdx===sessions.length-1}>Next →</button>
                   </div>
 
-                  {status === 'upcoming' && (
-                    <div style={{ ...s.restDay, padding:'1.5rem', marginBottom:14 }}>
-                      <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
-                      <div style={{ fontWeight:600, fontSize:16 }}>Upcoming session</div>
-                      <div style={{ color:'#888', fontSize:14, marginTop:4 }}>Scheduled for a future date. Come back then!</div>
-                    </div>
-                  )}
-
                   {activeSession.coach_note && (
                     <div style={s.noteBox}>
                       <div style={s.microLabel}>Coach note</div>
@@ -255,7 +252,8 @@ export default function ClientDashboard({ session }) {
                     </div>
                   )}
 
-                  {status !== 'upcoming' && activeSession.exercises?.map((ex, i) => (
+                  {/* Show full workout for ALL statuses including upcoming */}
+                  {activeSession.exercises?.map((ex, i) => (
                     <div key={i} style={s.exCard}>
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
                         <div style={{ fontWeight:700, fontSize:16 }}>{ex.name}</div>
@@ -270,31 +268,46 @@ export default function ClientDashboard({ session }) {
                           {ex.load && ex.load !== '-' && <span>{ex.load} kg</span>}
                         </div>
                       </div>
-                      <div style={s.logGrid}>
-                        <div>
-                          <div style={s.microLabel}>kg used</div>
-                          <input style={s.logInput} value={logged[i]?.load ?? ''} onChange={e => !submitted && updateLog(i, 'load', e.target.value, activeSession.id)} readOnly={submitted} placeholder="—" />
-                        </div>
-                        <div>
-                          <div style={s.microLabel}>RPE (1–10)</div>
-                          <input style={s.logInput} value={logged[i]?.rpe ?? ''} onChange={e => !submitted && updateLog(i, 'rpe', e.target.value, activeSession.id)} readOnly={submitted} placeholder="8" />
-                        </div>
-                      </div>
-                      <div style={{ marginTop:10 }}>
-                        <div style={s.microLabel}>Your notes</div>
-                        <textarea style={{ ...s.commentBox, background: submitted ? '#f7f6f3' : '#fafaf8' }} rows={2} placeholder="Notes, pain, PR…" value={logged[i]?.comment ?? ''} onChange={e => !submitted && updateLog(i, 'comment', e.target.value, activeSession.id)} readOnly={submitted} />
-                      </div>
+
+                      {/* Log inputs — only for non-upcoming, non-submitted */}
+                      {!isUpcoming && (
+                        <>
+                          <div style={s.logGrid}>
+                            <div>
+                              <div style={s.microLabel}>kg used</div>
+                              <input style={s.logInput} value={logged[i]?.load ?? ''} onChange={e => !submitted && updateLog(i, 'load', e.target.value, activeSession.id)} readOnly={submitted} placeholder="—" />
+                            </div>
+                            <div>
+                              <div style={s.microLabel}>RPE (1–10)</div>
+                              <input style={s.logInput} value={logged[i]?.rpe ?? ''} onChange={e => !submitted && updateLog(i, 'rpe', e.target.value, activeSession.id)} readOnly={submitted} placeholder="8" />
+                            </div>
+                          </div>
+                          <div style={{ marginTop:10 }}>
+                            <div style={s.microLabel}>Your notes</div>
+                            <textarea style={{ ...s.commentBox, background: submitted ? '#f7f6f3' : '#fafaf8' }} rows={2} placeholder="Notes, pain, PR…" value={logged[i]?.comment ?? ''} onChange={e => !submitted && updateLog(i, 'comment', e.target.value, activeSession.id)} readOnly={submitted} />
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
+
+                  {/* Upcoming session note */}
+                  {isUpcoming && (
+                    <div style={{ ...s.restDay, padding:'1rem', marginBottom:14, background:'#f0fde4', border:'1px solid #c8f04a' }}>
+                      <div style={{ fontSize:20, marginBottom:6 }}>📅</div>
+                      <div style={{ fontWeight:600, fontSize:14, color:'#2d7a30' }}>This is an upcoming session</div>
+                      <div style={{ color:'#555', fontSize:13, marginTop:4 }}>You can preview it here. Come back on the scheduled day to log your results.</div>
+                    </div>
+                  )}
 
                   {canSubmit && (
                     <div style={s.card}>
                       <div style={s.sectionLabel}>How did it go?</div>
                       <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:14 }}>
-                        {FEELS.map(f => <button key={f} style={{ ...s.feelBtn, ...(feel===f ? s.feelActive : {}) }} onClick={() => setFeel(f===feel ? '' : f)}>{f}</button>)}
+                        {FEELS.map(f => <button key={f} style={{ ...s.feelBtn, ...(feel===f?s.feelActive:{}) }} onClick={() => setFeel(f===feel?'':f)}>{f}</button>)}
                       </div>
                       <textarea style={{ ...s.commentBox, width:'100%' }} rows={3} placeholder="General notes for your coach…" value={note} onChange={e => setNote(e.target.value)} />
-                      <button style={s.btnPrimary} onClick={submitSession} disabled={submitting}>{submitting ? 'Submitting…' : 'Submit session →'}</button>
+                      <button style={s.btnPrimary} onClick={submitSession} disabled={submitting}>{submitting?'Submitting…':'Submit session →'}</button>
                     </div>
                   )}
 
@@ -316,7 +329,7 @@ export default function ClientDashboard({ session }) {
           <div style={{ maxWidth:500, margin:'0 auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
               <button style={s.navArrow} onClick={() => setCalMonth(m => { const n=new Date(m); n.setMonth(n.getMonth()-1); return n })}>← Prev</button>
-              <div style={{ fontWeight:700, fontSize:18 }}>{calMonth.toLocaleDateString('en-GB', { month:'long', year:'numeric' })}</div>
+              <div style={{ fontWeight:700, fontSize:18 }}>{calMonth.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
               <button style={s.navArrow} onClick={() => setCalMonth(m => { const n=new Date(m); n.setMonth(n.getMonth()+1); return n })}>Next →</button>
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4, marginBottom:6 }}>
@@ -325,15 +338,15 @@ export default function ClientDashboard({ session }) {
             <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:4 }}>
               {monthCells.map((cell, i) => (
                 <div key={i}
-                  style={{ minHeight:52, borderRadius:10, background: !cell ? 'transparent' : cell.isToday ? '#111' : cell.ws ? '#fff' : '#f7f6f3', border: !cell ? 'none' : cell.ws ? '1px solid #e4e2dc' : '1px solid transparent', cursor: cell?.ws ? 'pointer' : 'default', padding:'6px 4px', textAlign:'center', position:'relative' }}
+                  style={{ minHeight:52, borderRadius:10, background: !cell?'transparent':cell.isToday?'#111':cell.ws?'#fff':'#f7f6f3', border:!cell?'none':cell.ws?'1px solid #e4e2dc':'1px solid transparent', cursor:cell?.ws?'pointer':'default', padding:'6px 4px', textAlign:'center' }}
                   onClick={() => cell?.ws && jumpToSession(cell.ws)}
                 >
                   {cell && (
                     <>
-                      <div style={{ fontSize:13, fontWeight:600, color: cell.isToday ? '#fff' : '#333', marginBottom:2 }}>{cell.d}</div>
+                      <div style={{ fontSize:13, fontWeight:600, color:cell.isToday?'#fff':'#333', marginBottom:2 }}>{cell.d}</div>
                       {cell.ws && (
                         <>
-                          <div style={{ fontSize:14, color: cell.status==='logged' ? '#2d7a30' : cell.status==='today' ? '#c8f04a' : cell.status==='missed' ? '#c0392b' : '#888' }}>★</div>
+                          <div style={{ fontSize:14, color:cell.status==='logged'?'#2d7a30':cell.status==='today'?'#c8f04a':cell.status==='missed'?'#c0392b':'#888' }}>★</div>
                           <div style={{ fontSize:8, color:'#888', lineHeight:1.2, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', padding:'0 2px' }}>{cell.ws.title}</div>
                         </>
                       )}
@@ -348,20 +361,21 @@ export default function ClientDashboard({ session }) {
               <span><span style={{ color:'#c0392b' }}>★</span> Missed</span>
               <span><span style={{ color:'#888' }}>★</span> Upcoming</span>
             </div>
+            <p style={{ fontSize:12, color:'#aaa', marginTop:12, textAlign:'center' }}>Tap any ★ to view that session</p>
           </div>
         )}
 
         {/* HISTORY TAB */}
         {tab === 'history' && (
           <div style={{ maxWidth:620, margin:'0 auto' }}>
-            <h2 style={{ fontWeight:700, fontSize:20, marginBottom:'1rem' }}>Session history</h2>
+            <h2 style={{ fontWeight:700, fontSize:20, marginBottom:'1rem' }}>All sessions</h2>
             {sessions.length === 0 && <p style={{ color:'#aaa', fontSize:14 }}>No sessions yet.</p>}
             {[...sessions].reverse().map(ws => {
               const fb = ws.feedback?.[0]
               const status = getSessionStatus(ws, today)
               const badge = statusBadge(status)
               return (
-                <div key={ws.id} style={s.historyCard} onClick={() => jumpToSession(ws)}>
+                <div key={ws.id} style={{ ...s.historyCard, cursor:'pointer' }} onClick={() => jumpToSession(ws)}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom: fb ? 10 : 0 }}>
                     <div>
                       <div style={{ fontWeight:600, fontSize:15 }}>{ws.title}</div>
@@ -390,6 +404,12 @@ export default function ClientDashboard({ session }) {
                         </div>
                       )}
                     </div>
+                  )}
+                  {!fb && status !== 'upcoming' && (
+                    <div style={{ borderTop:'1px solid #f0ede6', paddingTop:8, fontSize:12, color:'#aaa', fontStyle:'italic' }}>Not logged yet — tap to log this session</div>
+                  )}
+                  {status === 'upcoming' && (
+                    <div style={{ borderTop:'1px solid #f0ede6', paddingTop:8, fontSize:12, color:'#888', fontStyle:'italic' }}>Tap to preview this upcoming session</div>
                   )}
                 </div>
               )
@@ -440,6 +460,6 @@ const s = {
   feelPill: { background:'#f0ede6', padding:'3px 10px', borderRadius:20, fontSize:12 },
   btnPrimary: { background:'#111', color:'#c8f04a', padding:'12px 20px', borderRadius:10, fontWeight:600, fontSize:14, cursor:'pointer', border:'none', display:'block', width:'100%', marginTop:12, fontFamily:'inherit' },
   restDay: { textAlign:'center', padding:'3rem 2rem', color:'#333', background:'#fff', border:'1px solid #e4e2dc', borderRadius:16, marginBottom:14 },
-  historyCard: { background:'#fff', border:'1px solid #e4e2dc', borderRadius:14, padding:'1rem 1.25rem', marginBottom:12, cursor:'pointer' },
+  historyCard: { background:'#fff', border:'1px solid #e4e2dc', borderRadius:14, padding:'1rem 1.25rem', marginBottom:12 },
   toast: { position:'fixed', bottom:24, right:24, background:'#111', color:'#c8f04a', padding:'10px 20px', borderRadius:10, fontSize:14, fontWeight:500, zIndex:999 },
 }
