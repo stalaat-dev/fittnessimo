@@ -49,12 +49,12 @@ function CopySummaryButton({ ws, fb, clientName }) {
     const highRPE = fb.logged_exercises?.filter(e => parseInt(e.rpe) >= 9)
     const pain = fb.logged_exercises?.filter(e => e.comment?.toLowerCase().includes('pain') || e.comment?.toLowerCase().includes('hurt'))
     const lightRPE = fb.logged_exercises?.filter(e => parseInt(e.rpe) <= 5 && e.rpe)
-    if (highRPE?.length) lines.push(`- High RPE (9+) on: ${highRPE.map(e => e.name).join(', ')} — consider reducing load`)
-    if (pain?.length) lines.push(`- Pain reported on: ${pain.map(e => e.name).join(', ')} — review exercise`)
-    if (lightRPE?.length) lines.push(`- Low RPE (5 or under) on: ${lightRPE.map(e => e.name).join(', ')} — consider increasing load`)
-    if (fb.feel === '💪 Strong' || fb.feel === '🔥 PR day') lines.push(`- Client felt strong — consider progressive overload next session`)
-    if (fb.feel === '😓 Tired' || fb.feel === '😣 Pain') lines.push(`- Client reported fatigue/pain — consider deload or substitution`)
-    if (!highRPE?.length && !pain?.length && !lightRPE?.length && fb.feel !== '😓 Tired' && fb.feel !== '😣 Pain') lines.push(`- Session appears well tolerated — maintain or progress as planned`)
+    if (highRPE?.length) lines.push(`- High RPE (9+) on: ${highRPE.map(e => e.name).join(', ')}`)
+    if (pain?.length) lines.push(`- Pain reported on: ${pain.map(e => e.name).join(', ')}`)
+    if (lightRPE?.length) lines.push(`- Low RPE (5 or under) on: ${lightRPE.map(e => e.name).join(', ')}`)
+    if (fb.feel === '💪 Strong' || fb.feel === '🔥 PR day') lines.push(`- Client felt strong, consider progressive overload`)
+    if (fb.feel === '😓 Tired' || fb.feel === '😣 Pain') lines.push(`- Client reported fatigue/pain, consider deload or substitution`)
+    if (!highRPE?.length && !pain?.length && !lightRPE?.length) lines.push(`- Session appears well tolerated`)
     return lines.join('\n')
   }
   function handleCopy() {
@@ -79,11 +79,11 @@ function ExerciseLogDetail({ ws, fb }) {
           <div key={i} style={{ background:'#fafaf8', borderRadius:8, padding:'10px 12px', marginBottom:8, border:'1px solid #f0ede6' }}>
             <div style={{ fontWeight:600, fontSize:14, marginBottom:4 }}>{ex.name}</div>
             {ex.comment && <div style={{ fontSize:12, color:'#888', fontStyle:'italic', marginBottom:6 }}>💡 {ex.comment}</div>}
-            <div style={{ display:'flex', gap:16, flexWrap:'wrap', fontSize:13, color:'#555', marginBottom: log ? 8 : 0 }}>
-              <span>Target: <strong>{ex.sets||'?'}×{ex.reps||'?'}{ex.load && ex.load!=='-' ? ` @ ${ex.load}kg` : ''}</strong></span>
+            <div style={{ fontSize:13, color:'#555', marginBottom: log ? 8 : 0 }}>
+              Target: <strong>{ex.sets||'?'}×{ex.reps||'?'}{ex.load && ex.load!=='-' ? ` @ ${ex.load}kg` : ''}</strong>
             </div>
-            {log && (
-              <div style={{ borderTop:'1px dashed #e4e2dc', paddingTop:8, marginTop:4 }}>
+            {log ? (
+              <div style={{ borderTop:'1px dashed #e4e2dc', paddingTop:8 }}>
                 <div style={{ fontSize:10, fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase', color:'#bbb', marginBottom:4 }}>Client logged</div>
                 <div style={{ display:'flex', gap:12, flexWrap:'wrap', fontSize:13, color:'#333' }}>
                   {log.load && <span>kg: <strong>{log.load}</strong></span>}
@@ -91,13 +91,113 @@ function ExerciseLogDetail({ ws, fb }) {
                 </div>
                 {log.comment && <p style={{ fontSize:12, color:'#666', fontStyle:'italic', marginTop:4 }}>"{log.comment}"</p>}
               </div>
+            ) : (
+              <div style={{ fontSize:12, color:'#bbb', fontStyle:'italic' }}>Not logged yet</div>
             )}
-            {!log && <div style={{ fontSize:12, color:'#bbb', fontStyle:'italic' }}>Not logged yet</div>}
           </div>
         )
       })}
     </div>
   )
+}
+
+// Edit workout modal
+function EditWorkoutModal({ ws, onClose, onSave, onDelete }) {
+  const [title, setTitle] = useState(ws.title || '')
+  const [date, setDate] = useState(ws.scheduled_date || '')
+  const [coachNote, setCoachNote] = useState(ws.coach_note || '')
+  const [exercises, setExercises] = useState(ws.exercises ? JSON.parse(JSON.stringify(ws.exercises)) : [])
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const updateEx = (i, field, val) => { const n=[...exercises]; n[i][field]=val; setExercises(n) }
+
+  async function handleSave() {
+    setSaving(true)
+    const { error } = await supabase.from('workout_sessions').update({
+      title, scheduled_date: date || null, coach_note: coachNote, exercises
+    }).eq('id', ws.id)
+    if (!error) onSave()
+    setSaving(false)
+  }
+
+  async function handleDelete() {
+    await supabase.from('workout_sessions').delete().eq('id', ws.id)
+    onDelete(ws)
+  }
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem' }}>
+      <div style={{ background:'#fff', borderRadius:20, padding:'1.5rem', width:'100%', maxWidth:680, maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.25rem' }}>
+          <div style={{ fontWeight:700, fontSize:18 }}>Edit workout</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#aaa' }}>✕</button>
+        </div>
+
+        <div style={m.sectionLabel}>Session details</div>
+        <label style={m.label}>Title</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} style={m.input} />
+        <label style={m.label}>Date</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={m.input} />
+        <label style={m.label}>Coach note</label>
+        <textarea value={coachNote} onChange={e => setCoachNote(e.target.value)} rows={2} style={{ ...m.input, resize:'none' }} />
+
+        <div style={{ borderTop:'1px solid #f0ede6', margin:'1rem 0' }} />
+        <div style={m.sectionLabel}>Exercises</div>
+
+        {exercises.map((ex, i) => (
+          <div key={i} style={{ background:'#fafaf8', border:'1px solid #e4e2dc', borderRadius:12, padding:'1rem', marginBottom:10 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+              <span style={{ fontWeight:600, fontSize:13, color:'#555' }}>Exercise {i+1}</span>
+              <button style={{ background:'none', border:'none', color:'#aaa', cursor:'pointer', fontSize:12 }} onClick={() => setExercises(exercises.filter((_,j)=>j!==i))}>✕ Remove</button>
+            </div>
+            <input value={ex.name||''} onChange={e => updateEx(i,'name',e.target.value)} placeholder="Exercise name" style={{ ...m.input, marginBottom:8, width:'100%' }} />
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:8 }}>
+              <div><div style={m.exLabel}>Sets</div><input value={ex.sets||''} onChange={e => updateEx(i,'sets',e.target.value)} placeholder="3" style={{ ...m.input, textAlign:'center' }} /></div>
+              <div><div style={m.exLabel}>Reps</div><input value={ex.reps||''} onChange={e => updateEx(i,'reps',e.target.value)} placeholder="10" style={{ ...m.input, textAlign:'center' }} /></div>
+              <div><div style={m.exLabel}>Load (kg)</div><input value={ex.load||''} onChange={e => updateEx(i,'load',e.target.value)} placeholder="60" style={{ ...m.input, textAlign:'center' }} /></div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+              <div><div style={m.exLabel}>Video label</div><input value={ex.videoLabel||''} onChange={e => updateEx(i,'videoLabel',e.target.value)} placeholder="Tutorial" style={m.input} /></div>
+              <div><div style={m.exLabel}>Video URL</div><input value={ex.videoUrl||''} onChange={e => updateEx(i,'videoUrl',e.target.value)} placeholder="https://youtube.com/…" style={m.input} /></div>
+            </div>
+            <div style={m.exLabel}>Coach cue</div>
+            <textarea value={ex.comment||''} onChange={e => updateEx(i,'comment',e.target.value)} placeholder="Coaching tip for client…" rows={2} style={{ ...m.input, resize:'none', width:'100%' }} />
+          </div>
+        ))}
+
+        <button style={{ background:'transparent', border:'1px solid #e4e2dc', borderRadius:8, padding:'6px 14px', fontSize:13, cursor:'pointer', marginBottom:'1rem', fontFamily:'inherit' }}
+          onClick={() => setExercises([...exercises, { name:'', sets:'', reps:'', load:'', videoLabel:'', videoUrl:'', comment:'' }])}>
+          + Add exercise
+        </button>
+
+        <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+          <button onClick={handleSave} disabled={saving} style={{ flex:1, background:'#111', color:'#c8f04a', border:'none', borderRadius:10, padding:'12px', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+            {saving ? 'Saving…' : 'Save changes →'}
+          </button>
+          <button onClick={onClose} style={{ background:'transparent', border:'1px solid #e4e2dc', borderRadius:10, padding:'12px 20px', fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+        </div>
+        {!confirmDelete ? (
+          <button onClick={() => setConfirmDelete(true)} style={{ width:'100%', background:'transparent', border:'1px solid #f5c6c6', borderRadius:10, padding:'10px', fontSize:13, cursor:'pointer', color:'#c0392b', fontFamily:'inherit' }}>
+            🗑️ Delete this workout
+          </button>
+        ) : (
+          <div style={{ background:'#fdecea', border:'1px solid #f5c6c6', borderRadius:10, padding:'12px', display:'flex', gap:8, alignItems:'center' }}>
+            <span style={{ fontSize:13, color:'#c0392b', flex:1 }}>Delete this workout permanently?</span>
+            <button onClick={handleDelete} style={{ background:'#c0392b', color:'#fff', border:'none', borderRadius:8, padding:'6px 14px', fontSize:13, cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>Delete</button>
+            <button onClick={() => setConfirmDelete(false)} style={{ background:'transparent', border:'1px solid #e4e2dc', borderRadius:8, padding:'6px 14px', fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const m = {
+  sectionLabel: { fontSize:11, fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase', color:'#aaa', marginBottom:10 },
+  label: { fontSize:13, fontWeight:500, color:'#555', marginBottom:5, display:'block', marginTop:8 },
+  input: { padding:'8px 10px', border:'1px solid #e4e2dc', borderRadius:8, fontSize:13, background:'#fafaf8', color:'#111', width:'100%', marginBottom:4, fontFamily:'inherit' },
+  exLabel: { fontSize:10, color:'#aaa', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4 },
 }
 
 export default function CoachDashboard({ session }) {
@@ -107,6 +207,11 @@ export default function CoachDashboard({ session }) {
   const [feedback, setFeedback] = useState([])
   const [selectedClient, setSelectedClient] = useState(null)
   const [expandedSession, setExpandedSession] = useState(null)
+  const [editingSession, setEditingSession] = useState(null)
+  const [expandedFeedback, setExpandedFeedback] = useState(null)
+  const [expandedCalDay, setExpandedCalDay] = useState(null)
+  const [undoSession, setUndoSession] = useState(null)
+  const [undoTimer, setUndoTimer] = useState(null)
   const [newClientEmail, setNewClientEmail] = useState('')
   const [newClientName, setNewClientName] = useState('')
   const [addingClient, setAddingClient] = useState(false)
@@ -116,6 +221,7 @@ export default function CoachDashboard({ session }) {
   const [calSelectedDay, setCalSelectedDay] = useState(null)
   const today = new Date()
 
+  // Build workout state
   const [wTitle, setWTitle] = useState('')
   const [wNote, setWNote] = useState('')
   const [wClient, setWClient] = useState('')
@@ -198,7 +304,7 @@ export default function CoachDashboard({ session }) {
               from:'Fittnessimo <onboarding@resend.dev>',
               to: client.email,
               subject:`💪 New workout just dropped, ${client.name.split(' ')[0]}!`,
-              html:`<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="font-weight:800">fittnessimo<span style="color:#c8f04a">.</span></h2><h3>New workout ready, ${client.name.split(' ')[0]}! 🔥</h3><p style="color:#444;line-height:1.6">Session: <strong>${wTitle}</strong>${wDate ? ` scheduled for ${new Date(wDate+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}` : ''}.</p>${wNote?`<p style="border-left:3px solid #c8f04a;padding-left:12px;font-style:italic">"${wNote}"</p>`:''}<a href="https://fittnessimo.vercel.app" style="display:inline-block;margin-top:20px;background:#111;color:#c8f04a;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">View my workout →</a></div>`
+              html:`<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px"><h2 style="font-weight:800">fittnessimo<span style="color:#c8f04a">.</span></h2><h3>New workout ready, ${client.name.split(' ')[0]}! 🔥</h3><p style="color:#444">Session: <strong>${wTitle}</strong>${wDate ? ` on ${new Date(wDate+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}` : ''}.</p>${wNote?`<p style="border-left:3px solid #c8f04a;padding-left:12px;font-style:italic">"${wNote}"</p>`:''}<a href="https://fittnessimo.vercel.app" style="display:inline-block;margin-top:20px;background:#111;color:#c8f04a;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">View my workout →</a></div>`
             })
           })
         } catch(e) {}
@@ -210,11 +316,35 @@ export default function CoachDashboard({ session }) {
     load(); setSaving(false)
   }
 
+  function handleDeletedSession(ws) {
+    setEditingSession(null)
+    setUndoSession(ws)
+    showToast('Workout deleted')
+    load()
+    const timer = setTimeout(() => { setUndoSession(null) }, 6000)
+    setUndoTimer(timer)
+  }
+
+  async function handleUndo() {
+    if (!undoSession) return
+    clearTimeout(undoTimer)
+    const { exercises, feedback, ...wsData } = undoSession
+    await supabase.from('workout_sessions').insert({ ...wsData, id: undefined })
+    setUndoSession(null)
+    showToast('Workout restored!')
+    load()
+  }
+
   async function signOut() { await supabase.auth.signOut() }
   const updateEx = (i, field, val) => { const n=[...exercises]; n[i][field]=val; setExercises(n) }
   const unreadFeedback = feedback.filter(f => !f.coach_read).length
 
-  // Build full month calendar
+  // Get existing session dates for a given client (to highlight in date picker)
+  const clientSessionDates = wClient
+    ? sessions.filter(ws => ws.client_id === wClient && ws.scheduled_date).map(ws => ws.scheduled_date)
+    : []
+
+  // Build month calendar
   function buildMonthCal() {
     const year = calMonth.getFullYear()
     const month = calMonth.getMonth()
@@ -233,10 +363,27 @@ export default function CoachDashboard({ session }) {
 
   const monthCells = buildMonthCal()
   const calDaySessions = calSelectedDay ? sessions.filter(ws => ws.scheduled_date === calSelectedDay) : []
+  const todayStr = today.toISOString().split('T')[0]
+  const todaySessions = sessions.filter(ws => ws.scheduled_date === todayStr)
 
   return (
     <div style={s.shell}>
       {toast && <div style={s.toast}>{toast}</div>}
+      {editingSession && (
+        <EditWorkoutModal
+          ws={editingSession}
+          onClose={() => setEditingSession(null)}
+          onSave={() => { setEditingSession(null); showToast('Workout updated!'); load() }}
+          onDelete={handleDeletedSession}
+        />
+      )}
+      {undoSession && (
+        <div style={{ position:'fixed', bottom:24, left:'50%', transform:'translateX(-50%)', background:'#333', color:'#fff', padding:'12px 20px', borderRadius:12, fontSize:14, zIndex:1001, display:'flex', alignItems:'center', gap:12, boxShadow:'0 4px 20px rgba(0,0,0,0.3)' }}>
+          <span>Workout deleted</span>
+          <button onClick={handleUndo} style={{ background:'#c8f04a', color:'#111', border:'none', borderRadius:8, padding:'5px 14px', fontWeight:700, fontSize:13, cursor:'pointer', fontFamily:'inherit' }}>Undo</button>
+        </div>
+      )}
+
       <div style={s.sidebar}>
         <div style={s.logo}>fittnessimo<span style={{ color:'#c8f04a' }}>.</span></div>
         <div style={s.navLabel}>Menu</div>
@@ -291,7 +438,8 @@ export default function CoachDashboard({ session }) {
                                       <div style={s.clientSub}>{ws.scheduled_date ? new Date(ws.scheduled_date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) : 'No date'}</div>
                                     </div>
                                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                                      {status==='logged' ? <span style={s.tagGreen}>Logged ✓</span> : status==='missed' ? <span style={s.tagRed}>Missed</span> : status==='today' ? <span style={s.tagAmber}>Today</span> : <span style={s.tagGrey}>Upcoming</span>}
+                                      {status==='logged'?<span style={s.tagGreen}>Done ✓</span>:status==='missed'?<span style={s.tagRed}>Missed</span>:status==='today'?<span style={s.tagAmber}>Today</span>:<span style={s.tagGrey}>Upcoming</span>}
+                                      <button style={{ ...s.btnSm, fontSize:11, padding:'3px 8px' }} onClick={e => { e.stopPropagation(); setEditingSession(ws) }}>✏️ Edit</button>
                                       <span style={{ color:'#aaa', fontSize:12 }}>{isExpanded?'▲':'▼'}</span>
                                     </div>
                                   </div>
@@ -336,7 +484,7 @@ export default function CoachDashboard({ session }) {
             <div style={s.card}>
               <div style={s.sectionLabel}>Session details</div>
               <label style={s.label}>Assign to</label>
-              <select value={wClient} onChange={e => setWClient(e.target.value)} style={s.inputSm}>
+              <select value={wClient} onChange={e => { setWClient(e.target.value); setWDate('') }} style={s.inputSm}>
                 <option value="">Choose a client…</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
@@ -344,15 +492,41 @@ export default function CoachDashboard({ session }) {
               <input value={wTitle} onChange={e => setWTitle(e.target.value)} placeholder="e.g. Lower body A" style={s.inputSm} />
               <label style={s.label}>Overall coach note</label>
               <textarea value={wNote} onChange={e => setWNote(e.target.value)} placeholder="General message for the client…" rows={2} style={{ ...s.inputSm, resize:'none' }} />
+
               <div style={s.divider} />
               <div style={s.sectionLabel}>Schedule</div>
               <div style={{ display:'flex', gap:8, marginBottom:14 }}>
                 <button style={{ ...s.btnSm, ...(assignMode==='single'?{background:'#111',color:'#c8f04a',border:'1px solid #111'}:{}) }} onClick={() => setAssignMode('single')}>Single date</button>
                 <button style={{ ...s.btnSm, ...(assignMode==='bulk'?{background:'#111',color:'#c8f04a',border:'1px solid #111'}:{}) }} onClick={() => setAssignMode('bulk')}>Bulk (multiple days)</button>
               </div>
+
               {assignMode === 'single' && (
-                <div><label style={s.label}>Session date</label><input type="date" value={wDate} onChange={e => setWDate(e.target.value)} style={s.inputSm} /></div>
+                <div>
+                  <label style={s.label}>Session date</label>
+                  <input type="date" value={wDate} onChange={e => setWDate(e.target.value)} style={s.inputSm} />
+                  {/* Existing sessions for selected client */}
+                  {wClient && clientSessionDates.length > 0 && (
+                    <div style={{ marginTop:4, marginBottom:12 }}>
+                      <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#aaa', marginBottom:8 }}>Already scheduled for this client</div>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {clientSessionDates.sort().map((d, i) => {
+                          const conflict = wDate && (d === wDate || Math.abs(new Date(d) - new Date(wDate)) === 86400000)
+                          return (
+                            <span key={i} style={{ fontSize:12, padding:'3px 10px', borderRadius:20, background: conflict ? '#fdecea' : '#f0fde4', color: conflict ? '#c0392b' : '#2d7a30', fontWeight:500, border: conflict ? '1px solid #f5c6c6' : '1px solid #c8f04a' }}>
+                              {conflict ? '⚠️ ' : '★ '}
+                              {new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}
+                            </span>
+                          )
+                        })}
+                      </div>
+                      {wDate && clientSessionDates.includes(wDate) && (
+                        <div style={{ fontSize:12, color:'#c0392b', marginTop:8, fontWeight:500 }}>⚠️ This client already has a session on this date.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
+
               {assignMode === 'bulk' && (
                 <div>
                   <label style={s.label}>Start from</label>
@@ -365,8 +539,21 @@ export default function CoachDashboard({ session }) {
                     ))}
                   </div>
                   {bulkStartDate && bulkDays.length > 0 && <div style={{ fontSize:12, color:'#888', marginBottom:8 }}>Will create {bulkDays.length} session{bulkDays.length!==1?'s':''}</div>}
+                  {wClient && clientSessionDates.length > 0 && (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase', color:'#aaa', marginBottom:8 }}>Already scheduled for this client</div>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {clientSessionDates.sort().map((d, i) => (
+                          <span key={i} style={{ fontSize:12, padding:'3px 10px', borderRadius:20, background:'#f0fde4', color:'#2d7a30', fontWeight:500, border:'1px solid #c8f04a' }}>
+                            ★ {new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
               <div style={s.divider} />
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                 <div style={s.sectionLabel}>Exercises</div>
@@ -374,13 +561,17 @@ export default function CoachDashboard({ session }) {
                   {showImport?'✕ Close':'⚡ Quick import from Claude'}
                 </button>
               </div>
+
               {showImport && (
                 <div style={s.importBox}>
                   <div style={{ fontSize:11, fontWeight:600, letterSpacing:'0.07em', textTransform:'uppercase', color:'#888', marginBottom:8 }}>Paste Claude workout format</div>
-                  <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder={`Exercise: Romanian Deadlift\nSets: 4 | Reps: 10-12 | Load: 60kg\nVideoLabel: RDL tutorial | Video: https://youtube.com/...\nComment: Drive through heels`} rows={8} style={{ ...s.exInput, width:'100%', resize:'vertical', marginTop:4, fontFamily:'monospace', fontSize:12, lineHeight:1.6 }} />
+                  <textarea value={importText} onChange={e => setImportText(e.target.value)}
+                    placeholder={`Exercise: Romanian Deadlift\nSets: 4 | Reps: 10-12 | Load: 60kg\nVideoLabel: RDL tutorial | Video: https://youtube.com/...\nComment: Drive through heels`}
+                    rows={8} style={{ ...s.exInput, width:'100%', resize:'vertical', marginTop:4, fontFamily:'monospace', fontSize:12, lineHeight:1.6 }} />
                   <button style={{ ...s.btnPrimary, marginTop:10 }} onClick={parseImport} disabled={!importText.trim()}>⚡ Import exercises →</button>
                 </div>
               )}
+
               {exercises.map((ex, i) => (
                 <div key={i} style={s.exBlock}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
@@ -398,11 +589,12 @@ export default function CoachDashboard({ session }) {
                     <div><div style={s.exLabel}>Video URL</div><input value={ex.videoUrl} onChange={e => updateEx(i,'videoUrl',e.target.value)} placeholder="https://youtube.com/…" style={s.exInput} /></div>
                   </div>
                   <div>
-                    <div style={s.exLabel}>Coach cue (shown to client)</div>
+                    <div style={s.exLabel}>Coach cue</div>
                     <textarea value={ex.comment} onChange={e => updateEx(i,'comment',e.target.value)} placeholder="e.g. Drive through heels, slow 3-sec eccentric" rows={2} style={{ ...s.exInput, resize:'none', width:'100%' }} />
                   </div>
                 </div>
               ))}
+
               <button style={s.btnSm} onClick={() => setExercises([...exercises,{name:'',sets:'',reps:'',load:'',videoLabel:'',videoUrl:'',comment:''}])}>+ Add exercise</button>
               <div style={s.divider} />
               <button style={s.btnPrimary} onClick={saveWorkout} disabled={saving||!wTitle||!wClient}>{saving?'Assigning…':'Assign to client →'}</button>
@@ -433,14 +625,14 @@ export default function CoachDashboard({ session }) {
                     const isSelected = calSelectedDay === cell.dStr
                     return (
                       <div key={i}
-                        style={{ minHeight:56, borderRadius:10, background: isSelected ? '#111' : cell.isToday ? '#f0fde4' : hasSessions ? '#fff' : '#f7f6f3', border: isSelected ? '1px solid #c8f04a' : hasSessions ? '1px solid #e4e2dc' : '1px solid transparent', cursor: hasSessions ? 'pointer' : 'default', padding:'6px 4px', textAlign:'center' }}
-                        onClick={() => hasSessions && setCalSelectedDay(isSelected ? null : cell.dStr)}
+                        style={{ minHeight:56, borderRadius:10, background: isSelected?'#111':cell.isToday?'#f0fde4':hasSessions?'#fff':'#f7f6f3', border: isSelected?'1px solid #c8f04a':hasSessions?'1px solid #e4e2dc':'1px solid transparent', cursor:hasSessions?'pointer':'default', padding:'6px 4px', textAlign:'center' }}
+                        onClick={() => hasSessions && setCalSelectedDay(isSelected?null:cell.dStr)}
                       >
-                        <div style={{ fontSize:13, fontWeight:600, color: isSelected ? '#fff' : cell.isToday ? '#2d7a30' : '#333', marginBottom:2 }}>{cell.d}</div>
+                        <div style={{ fontSize:13, fontWeight:600, color:isSelected?'#fff':cell.isToday?'#2d7a30':'#333', marginBottom:2 }}>{cell.d}</div>
                         {hasSessions && (
                           <>
-                            <div style={{ fontSize:14, color: allDone ? '#2d7a30' : someDone ? '#9a6800' : '#888' }}>★</div>
-                            <div style={{ fontSize:8, color: isSelected ? '#aaa' : '#888', lineHeight:1.2 }}>{cell.daySessions.length} session{cell.daySessions.length!==1?'s':''}</div>
+                            <div style={{ fontSize:12, color:allDone?'#2d7a30':someDone?'#9a6800':'#888' }}>★</div>
+                            <div style={{ fontSize:8, color:isSelected?'#aaa':'#888', lineHeight:1.2 }}>{cell.daySessions.length}s</div>
                           </>
                         )}
                       </div>
@@ -454,38 +646,80 @@ export default function CoachDashboard({ session }) {
                 </div>
               </div>
 
-              {/* Day detail panel */}
+              {/* Right panel: today's sessions always shown, selected day on click */}
               <div>
-                {calSelectedDay ? (
+                {/* Today's sessions - always visible, collapsible */}
+                {todaySessions.length > 0 && (
+                  <div style={{ marginBottom:16 }}>
+                    <div style={{ fontWeight:700, fontSize:15, marginBottom:10, color:'#2d7a30' }}>Today 📅</div>
+                    {todaySessions.map(ws => {
+                      const fb = feedback.find(f => f.session_id === ws.id)
+                      const client = clients.find(c => c.id === ws.client_id)
+                      const isExpanded = expandedCalDay === `today-${ws.id}`
+                      return (
+                        <div key={ws.id} style={{ ...s.card, marginBottom:8, padding:'0.875rem 1rem' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={() => setExpandedCalDay(isExpanded?null:`today-${ws.id}`)}>
+                            <div>
+                              <div style={{ fontWeight:600, fontSize:14 }}>{client?.name}</div>
+                              <div style={{ fontSize:12, color:'#888' }}>{ws.title}</div>
+                            </div>
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {fb ? <span style={s.tagGreen}>Done ✓</span> : <span style={s.tagAmber}>Pending</span>}
+                              <span style={{ color:'#aaa', fontSize:12 }}>{isExpanded?'▲':'▼'}</span>
+                            </div>
+                          </div>
+                          {isExpanded && (
+                            <div style={{ marginTop:12, borderTop:'1px solid #f0ede6', paddingTop:12 }}>
+                              <ExerciseLogDetail ws={ws} fb={fb} />
+                              {fb && client && <CopySummaryButton ws={ws} fb={fb} clientName={client.name} />}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Selected day detail */}
+                {calSelectedDay && calSelectedDay !== todayStr && (
                   <div>
-                    <div style={{ fontWeight:700, fontSize:16, marginBottom:12 }}>
+                    <div style={{ fontWeight:700, fontSize:15, marginBottom:10 }}>
                       {new Date(calSelectedDay+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}
                     </div>
                     {calDaySessions.map(ws => {
                       const fb = feedback.find(f => f.session_id === ws.id)
                       const client = clients.find(c => c.id === ws.client_id)
                       const status = getSessionStatus(ws, today)
+                      const isExpanded = expandedCalDay === ws.id
                       return (
-                        <div key={ws.id} style={{ ...s.card, marginBottom:12 }}>
-                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                        <div key={ws.id} style={{ ...s.card, marginBottom:8, padding:'0.875rem 1rem' }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={() => setExpandedCalDay(isExpanded?null:ws.id)}>
                             <div>
-                              <div style={{ fontWeight:600, fontSize:15 }}>{ws.title}</div>
-                              <div style={{ fontSize:12, color:'#888' }}>{client?.name}</div>
+                              <div style={{ fontWeight:600, fontSize:14 }}>{client?.name}</div>
+                              <div style={{ fontSize:12, color:'#888' }}>{ws.title}</div>
                             </div>
-                            {status==='logged' ? <span style={s.tagGreen}>Done ✓</span> : status==='missed' ? <span style={s.tagRed}>Missed</span> : status==='today' ? <span style={s.tagAmber}>Today</span> : <span style={s.tagGrey}>Upcoming</span>}
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {status==='logged'?<span style={s.tagGreen}>Done ✓</span>:status==='missed'?<span style={s.tagRed}>Missed</span>:<span style={s.tagGrey}>Upcoming</span>}
+                              <button style={{ ...s.btnSm, fontSize:11, padding:'3px 8px' }} onClick={e => { e.stopPropagation(); setEditingSession(ws) }}>✏️</button>
+                              <span style={{ color:'#aaa', fontSize:12 }}>{isExpanded?'▲':'▼'}</span>
+                            </div>
                           </div>
-                          <ExerciseLogDetail ws={ws} fb={fb} />
-                          {fb && fb.feel && <div style={{ marginTop:10 }}><span style={s.feelPill}>{fb.feel}</span></div>}
-                          {fb && fb.note && <p style={{ fontSize:13, color:'#555', marginTop:8, fontStyle:'italic' }}>"{fb.note}"</p>}
-                          {fb && client && <CopySummaryButton ws={ws} fb={fb} clientName={client.name} />}
+                          {isExpanded && (
+                            <div style={{ marginTop:12, borderTop:'1px solid #f0ede6', paddingTop:12 }}>
+                              <ExerciseLogDetail ws={ws} fb={fb} />
+                              {fb && client && <CopySummaryButton ws={ws} fb={fb} clientName={client.name} />}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
                   </div>
-                ) : (
+                )}
+
+                {!calSelectedDay && todaySessions.length === 0 && (
                   <div style={{ color:'#aaa', fontSize:14, paddingTop:'2rem', textAlign:'center' }}>
                     <div style={{ fontSize:32, marginBottom:8 }}>📅</div>
-                    Click a day with a ★ to see sessions
+                    No sessions today. Click a ★ day to see sessions.
                   </div>
                 )}
               </div>
@@ -498,42 +732,58 @@ export default function CoachDashboard({ session }) {
           <div>
             <h1 style={s.h1}>Client feedback</h1>
             {feedback.length === 0 && <p style={s.empty}>No feedback yet.</p>}
-            {feedback.map(f => (
-              <div key={f.id} style={{ ...s.card, marginBottom:12, borderLeft: !f.coach_read ? '3px solid #c8f04a' : '3px solid transparent' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                  <div>
-                    <div style={{ fontWeight:600, fontSize:15 }}>{f.workout_sessions?.clients?.name || 'Client'}</div>
-                    <div style={{ fontSize:13, color:'#888' }}>
-                      {f.workout_sessions?.title}
-                      {f.workout_sessions?.scheduled_date ? ` · ${new Date(f.workout_sessions.scheduled_date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : ''}
+            {feedback.map(f => {
+              const isExpanded = expandedFeedback === f.id
+              return (
+                <div key={f.id} style={{ ...s.card, marginBottom:10, borderLeft: !f.coach_read ? '3px solid #c8f04a' : '3px solid transparent', padding:'0.875rem 1.25rem' }}>
+                  {/* Collapsed header — always visible */}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={() => setExpandedFeedback(isExpanded?null:f.id)}>
+                    <div>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <div style={{ fontWeight:600, fontSize:15 }}>{f.workout_sessions?.clients?.name || 'Client'}</div>
+                        {!f.coach_read && <span style={{ fontSize:10, background:'#c8f04a', color:'#111', fontWeight:700, padding:'2px 7px', borderRadius:20 }}>NEW</span>}
+                      </div>
+                      <div style={{ fontSize:13, color:'#888', marginTop:2 }}>
+                        {f.workout_sessions?.title}
+                        {f.workout_sessions?.scheduled_date ? ` · ${new Date(f.workout_sessions.scheduled_date+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}` : ''}
+                        {f.feel ? ` · ${f.feel}` : ''}
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      {!f.coach_read && <button style={{ ...s.btnSm, fontSize:11, padding:'3px 8px' }} onClick={async e => { e.stopPropagation(); await supabase.from('feedback').update({coach_read:true}).eq('id',f.id); load() }}>Mark read</button>}
+                      <span style={{ color:'#aaa', fontSize:12 }}>{isExpanded?'▲':'▼'}</span>
                     </div>
                   </div>
-                  {!f.coach_read && <button style={s.btnSm} onClick={async () => { await supabase.from('feedback').update({coach_read:true}).eq('id',f.id); load() }}>Mark read</button>}
-                </div>
-                {f.feel && <div style={{ marginBottom:8 }}><span style={s.feelPill}>{f.feel}</span></div>}
-                {f.note && <p style={{ fontSize:14, lineHeight:1.6, color:'#333', marginBottom:12 }}>"{f.note}"</p>}
-                {f.logged_exercises?.length > 0 && (
-                  <div>
-                    <div style={s.sectionLabel}>Exercise results</div>
-                    {f.logged_exercises.map((ex, i) => {
-                      const target = f.workout_sessions?.exercises?.[i]
-                      return (
-                        <div key={i} style={{ background:'#fafaf8', borderRadius:8, padding:'10px 12px', marginBottom:8, border:'1px solid #f0ede6' }}>
-                          <div style={{ fontWeight:600, fontSize:14, marginBottom:4 }}>{ex.name}</div>
-                          {target && <div style={{ fontSize:12, color:'#aaa', marginBottom:6 }}>Target: {target.sets}×{target.reps}{target.load && target.load!=='-' ? ` @ ${target.load}kg` : ''}</div>}
-                          <div style={{ display:'flex', gap:12, flexWrap:'wrap', fontSize:13, color:'#333' }}>
-                            {ex.load && <span>kg used: <strong>{ex.load}</strong></span>}
-                            {ex.rpe && <span>RPE: <strong>{ex.rpe}</strong></span>}
-                          </div>
-                          {ex.comment && <p style={{ fontSize:12, color:'#666', fontStyle:'italic', marginTop:4 }}>"{ex.comment}"</p>}
+
+                  {/* Expanded content */}
+                  {isExpanded && (
+                    <div style={{ marginTop:14, borderTop:'1px solid #f0ede6', paddingTop:14 }}>
+                      {f.note && <p style={{ fontSize:14, lineHeight:1.6, color:'#333', marginBottom:12 }}>"{f.note}"</p>}
+                      {f.logged_exercises?.length > 0 && (
+                        <div>
+                          <div style={s.sectionLabel}>Exercise results</div>
+                          {f.logged_exercises.map((ex, i) => {
+                            const target = f.workout_sessions?.exercises?.[i]
+                            return (
+                              <div key={i} style={{ background:'#fafaf8', borderRadius:8, padding:'10px 12px', marginBottom:8, border:'1px solid #f0ede6' }}>
+                                <div style={{ fontWeight:600, fontSize:14, marginBottom:4 }}>{ex.name}</div>
+                                {target && <div style={{ fontSize:12, color:'#aaa', marginBottom:6 }}>Target: {target.sets}×{target.reps}{target.load && target.load!=='-' ? ` @ ${target.load}kg` : ''}</div>}
+                                <div style={{ display:'flex', gap:12, flexWrap:'wrap', fontSize:13, color:'#333' }}>
+                                  {ex.load && <span>kg used: <strong>{ex.load}</strong></span>}
+                                  {ex.rpe && <span>RPE: <strong>{ex.rpe}</strong></span>}
+                                </div>
+                                {ex.comment && <p style={{ fontSize:12, color:'#666', fontStyle:'italic', marginTop:4 }}>"{ex.comment}"</p>}
+                              </div>
+                            )
+                          })}
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-                {f.workout_sessions && <CopySummaryButton ws={f.workout_sessions} fb={f} clientName={f.workout_sessions?.clients?.name || 'Client'} />}
-              </div>
-            ))}
+                      )}
+                      {f.workout_sessions && <CopySummaryButton ws={f.workout_sessions} fb={f} clientName={f.workout_sessions?.clients?.name || 'Client'} />}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -576,10 +826,10 @@ const s = {
   sessionRow: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid #f0ede6', cursor:'pointer' },
   sessionDetail: { background:'#fff', border:'1px solid #e4e2dc', borderRadius:10, padding:'1rem', marginBottom:8 },
   noteBox: { background:'#fffdf5', border:'1px solid #f0ede6', borderLeft:'3px solid #c8f04a', borderRadius:8, padding:'10px 12px', marginBottom:12 },
-  tagGreen: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#eafbe5', color:'#2d7a30', fontWeight:500 },
-  tagAmber: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#fef3dc', color:'#9a6800', fontWeight:500 },
-  tagRed: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#fdecea', color:'#c0392b', fontWeight:500 },
-  tagGrey: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#f0ede6', color:'#555', fontWeight:500 },
+  tagGreen: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#eafbe5', color:'#2d7a30', fontWeight:500, flexShrink:0 },
+  tagAmber: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#fef3dc', color:'#9a6800', fontWeight:500, flexShrink:0 },
+  tagRed: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#fdecea', color:'#c0392b', fontWeight:500, flexShrink:0 },
+  tagGrey: { fontSize:12, padding:'3px 10px', borderRadius:20, background:'#f0ede6', color:'#555', fontWeight:500, flexShrink:0 },
   empty: { color:'#aaa', fontSize:14, padding:'1rem 0' },
   toast: { position:'fixed', bottom:24, right:24, background:'#111', color:'#c8f04a', padding:'10px 20px', borderRadius:10, fontSize:14, fontWeight:500, zIndex:999 },
   feelPill: { background:'#f0ede6', padding:'3px 10px', borderRadius:20, fontSize:13 },
