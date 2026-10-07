@@ -266,7 +266,7 @@ export default function CoachDashboard({ session }) {
   const load = useCallback(async () => {
     const { data: c } = await supabase.from('clients').select('*').order('created_at')
     setClients(c || [])
-    const { data: s } = await supabase.from('workout_sessions').select('*, feedback(*)').order('scheduled_date', { ascending:true, nullsFirst:false })
+    const { data: s } = await supabase.from('workout_sessions').select('*, feedback(id, session_id, created_at)').order('scheduled_date', { ascending:true, nullsFirst:false }).order('scheduled_date', { ascending:true, nullsFirst:false })
     setSessions(s || [])
     const { data: f } = await supabase.from('feedback').select('*, workout_sessions(title, scheduled_date, exercises, clients(name))').order('created_at', { ascending:false })
     setFeedback(f || [])
@@ -434,7 +434,7 @@ export default function CoachDashboard({ session }) {
                             : clientSessions.map(ws => {
                               const fb = feedback.find(f => f.session_id === ws.id)
                               const isExpanded = expandedSession === ws.id
-                              const status = getSessionStatus(ws, today)
+                              const status = getSessionStatus({...ws, feedback: feedback.filter(f => f.session_id === ws.id)}, today)
                               return (
                                 <div key={ws.id}>
                                   <div style={s.sessionRow} onClick={() => setExpandedSession(isExpanded?null:ws.id)}>
